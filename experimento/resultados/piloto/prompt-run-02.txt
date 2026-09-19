@@ -1,0 +1,659 @@
+Implemente o sistema de software descrito na especificação abaixo.
+
+Condições da tarefa:
+1. Escreva todos os arquivos do sistema dentro do diretório /home/caio/Documents/PUC/2026.02 Sistemas Distribuidos/Agente_Especificacao/aed-sistemas-distribuidos/experimento/resultados/piloto/run-02. Não crie
+   nem modifique nenhum arquivo fora desse diretório.
+2. Não leia nenhum arquivo do repositório. A especificação abaixo é a única fonte
+   de informação sobre o sistema.
+3. Entregue arquivos completos e funcionais, sem trechos omitidos e sem
+   marcadores de continuação.
+4. Não escreva testes automatizados.
+5. Não peça esclarecimentos e não faça perguntas: implemente a partir do que está
+   escrito abaixo.
+6. Ao terminar, responda apenas com a lista dos arquivos que você criou.
+
+ESPECIFICAÇÃO:
+
+# Documento de Especificação de Requisitos — Sistema de Gestão de Biblioteca
+
+## 0. Metadados
+
+| Campo | Valor |
+|---|---|
+| Nome do sistema | Sistema de Gestão de Biblioteca |
+| Versão do documento | 1.0 |
+| Versão do template | 1.0 |
+| Autores | Grupo AED — Sistemas Distribuídos |
+| Revisor (não pode ser autor) | Revisor designado do grupo |
+| Data | 2026-09-19 |
+| Status | Aprovado |
+
+---
+
+## 1. Objetivo do sistema
+
+O sistema permite que bibliotecários registrem empréstimos e devoluções de livros para controlar a circulação do acervo e a inadimplência dos usuários.
+
+---
+
+## 2. Escopo
+
+### 2.1 Incluído
+
+- Cadastro, consulta, listagem e exclusão de livros.
+- Cadastro e consulta de usuários.
+- Registro de empréstimos, com validação de disponibilidade e de situação do usuário.
+- Registro de devoluções, com cálculo automático de multa por atraso.
+- Consulta dos empréstimos de um usuário.
+- Quitação de multa.
+
+### 2.2 Explicitamente excluído
+
+O sistema **não** implementa:
+
+- Autenticação, autorização, usuários administradores ou controle de sessão.
+- Interface web, HTML, CSS ou qualquer front-end.
+- Persistência em disco, banco de dados, arquivos ou ORM.
+- Envio de e-mail, notificações ou mensageria.
+- Reserva de livros, renovação de empréstimo ou fila de espera.
+- Paginação, ordenação configurável ou busca textual.
+- Logging estruturado, métricas, health-check adicional ou monitoramento.
+- Docker, docker-compose, CI, Makefile ou scripts de deploy.
+- Testes automatizados, README ou documentação adicional.
+
+---
+
+## 3. Glossário
+
+| Termo | Definição |
+|---|---|
+| Livro | Exemplar único do acervo, identificado por `id` próprio. Dois exemplares da mesma obra são dois livros distintos, com `isbn` distintos. |
+| Usuário | Pessoa autorizada a tomar livros emprestados. |
+| Empréstimo | Registro da entrega de um livro a um usuário, com prazo de devolução. Permanece com `status` igual a `ativo` até a devolução. |
+| Empréstimo ativo | Empréstimo cujo `status` é `ativo`, isto é, ainda não devolvido. |
+| Devolução | Ato de encerrar um empréstimo, devolvendo o livro ao acervo. |
+| Multa | Valor em reais devido por devolução posterior à `data_devolucao_prevista`, calculado conforme RN-04. Acumula no campo `multa_pendente` do usuário e não implica alteração do `status` do usuário. |
+| Atraso | Quantidade de dias inteiros entre a `data_devolucao_prevista` e a data efetiva de devolução, quando esta for posterior àquela. |
+
+---
+
+## 4. Stack técnica e restrições de implementação
+
+| Item | Especificação obrigatória |
+|---|---|
+| Linguagem / versão | Python 3.11 ou superior |
+| Framework | FastAPI |
+| Validação de dados | Pydantic v2 |
+| Servidor de aplicação | Uvicorn |
+| Persistência | Em memória, no processo, usando estruturas de dados nativas do Python (`dict` e `list`). O estado é perdido ao encerrar o processo, e isso é aceito. |
+| Bibliotecas permitidas | Apenas `fastapi`, `pydantic`, `uvicorn` e a biblioteca padrão do Python. |
+| Bibliotecas proibidas | `sqlalchemy`, qualquer ORM, qualquer banco de dados (incluindo `sqlite3`), `requests`, `httpx`, bibliotecas de autenticação, bibliotecas de logging de terceiros, qualquer pacote não listado como permitido. |
+
+---
+
+## 5. Modelo de dados
+
+### 5.1 Entidade: Livro
+
+| Atributo | Tipo | Obrigatório | Restrições / validação | Exemplo |
+|---|---|---|---|---|
+| `id` | inteiro | Não (gerado pelo sistema) | Gerado pelo sistema, sequencial, iniciando em `1`, nunca reaproveitado | `1` |
+| `titulo` | string | Sim | Entre 1 e 200 caracteres, após remoção de espaços nas extremidades | `"Dom Casmurro"` |
+| `autor` | string | Sim | Entre 1 e 100 caracteres, após remoção de espaços nas extremidades | `"Machado de Assis"` |
+| `isbn` | string | Sim | Exatamente 13 caracteres, todos dígitos de `0` a `9`; único no sistema | `"9788525406958"` |
+| `status` | string | Não (definido pelo sistema) | Um de: `disponivel`, `emprestado` | `"disponivel"` |
+
+**Estados possíveis de `status`:** `disponivel`, `emprestado` · **valor inicial:** `disponivel`
+
+### 5.2 Entidade: Usuario
+
+| Atributo | Tipo | Obrigatório | Restrições / validação | Exemplo |
+|---|---|---|---|---|
+| `id` | inteiro | Não (gerado pelo sistema) | Gerado pelo sistema, sequencial, iniciando em `1`, nunca reaproveitado | `1` |
+| `nome` | string | Sim | Entre 1 e 100 caracteres, após remoção de espaços nas extremidades | `"Maria Silva"` |
+| `email` | string | Sim | Deve conter exatamente um caractere `@`, com ao menos um caractere antes e ao menos um depois; único no sistema | `"maria@exemplo.com"` |
+| `status` | string | Não (aceito na criação; `ativo` quando ausente) | Um de: `ativo`, `inativo` | `"ativo"` |
+| `multa_pendente` | número decimal | Não (definido pelo sistema) | Maior ou igual a `0`, com duas casas decimais | `0.0` |
+
+**Estados possíveis de `status`:** `ativo`, `inativo` · **valor inicial:** `ativo`
+**Valor inicial de `multa_pendente`:** `0.0`
+
+### 5.3 Entidade: Emprestimo
+
+| Atributo | Tipo | Obrigatório | Restrições / validação | Exemplo |
+|---|---|---|---|---|
+| `id` | inteiro | Não (gerado pelo sistema) | Gerado pelo sistema, sequencial, iniciando em `1`, nunca reaproveitado | `1` |
+| `usuario_id` | inteiro | Sim | Deve referenciar um `Usuario` existente | `1` |
+| `livro_id` | inteiro | Sim | Deve referenciar um `Livro` existente | `1` |
+| `data_emprestimo` | string | Não | Data no formato `AAAA-MM-DD`. Quando ausente, o sistema usa a data atual | `"2026-09-19"` |
+| `data_devolucao_prevista` | string | Não (calculado pelo sistema) | Data no formato `AAAA-MM-DD`, igual a `data_emprestimo` mais 14 dias (RN-07) | `"2026-10-03"` |
+| `data_devolucao_real` | string ou nulo | Não (definido pelo sistema) | Data no formato `AAAA-MM-DD`, ou `null` enquanto o empréstimo estiver ativo | `null` |
+| `multa` | número decimal | Não (calculado pelo sistema) | Maior ou igual a `0`, com duas casas decimais. Vale `0.0` enquanto o empréstimo estiver ativo | `0.0` |
+| `status` | string | Não (definido pelo sistema) | Um de: `ativo`, `devolvido` | `"ativo"` |
+
+**Estados possíveis de `status`:** `ativo`, `devolvido` · **valor inicial:** `ativo`
+**Valor inicial de `data_devolucao_real`:** `null` · **Valor inicial de `multa`:** `0.0`
+
+---
+
+## 6. Regras de negócio
+
+| ID | Regra | Requisitos afetados |
+|---|---|---|
+| RN-01 | Um usuário não pode possuir mais de 3 empréstimos com `status` igual a `ativo` simultaneamente. | RF-07 |
+| RN-02 | Um usuário com `multa_pendente` maior que `0` não pode registrar novo empréstimo. | RF-07 |
+| RN-03 | Um usuário com `status` igual a `inativo` não pode registrar novo empréstimo. | RF-07 |
+| RN-04 | A multa de uma devolução é calculada como `1.50` multiplicado pelo número de dias inteiros de atraso, onde dias de atraso é a diferença em dias entre `data_devolucao_real` e `data_devolucao_prevista` quando esta diferença for maior que `0`; caso contrário, a multa é `0.0`. | RF-08 |
+| RN-05 | Um livro com `status` igual a `emprestado` não pode ser emprestado novamente. | RF-07 |
+| RN-06 | Um livro que possui empréstimo com `status` igual a `ativo` não pode ser excluído. | RF-04 |
+| RN-07 | A `data_devolucao_prevista` de um empréstimo é igual à `data_emprestimo` mais 14 dias. | RF-07 |
+| RN-08 | O campo `isbn` é único entre todos os livros cadastrados. | RF-01 |
+| RN-09 | O campo `email` é único entre todos os usuários cadastrados. | RF-05 |
+| RN-10 | O valor da multa calculada em uma devolução é somado ao campo `multa_pendente` do usuário do empréstimo. | RF-08 |
+
+---
+
+## 7. Requisitos funcionais
+
+### RF-01 — Cadastrar livro
+
+- **Descrição:** O sistema deve cadastrar um novo livro no acervo.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** `titulo` (string), `autor` (string), `isbn` (string)
+- **Processamento:** validar os campos conforme a Seção 5.1; verificar RN-08; gerar `id` sequencial; definir `status` como `disponivel`.
+- **Saída:** objeto `Livro` completo com status `201`.
+- **Regras relacionadas:** RN-08
+- **Critérios de aceitação:**
+  - **CA-01.1** Dado um corpo válido com `titulo`, `autor` e `isbn` inéditos, quando `POST /livros` for chamado, então a resposta deve ter status `201` e o corpo deve conter `id` inteiro, os mesmos `titulo` e `autor` enviados, e `status` igual a `disponivel`.
+  - **CA-01.2** Dado um corpo cujo `isbn` possui 10 caracteres, quando `POST /livros` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "ISBN inválido"}`.
+  - **CA-01.3** Dado um `isbn` já cadastrado em outro livro, quando `POST /livros` for chamado, então a resposta deve ter status `409` e corpo `{"erro": "ISBN já cadastrado"}`.
+  - **CA-01.4** Dado um corpo cujo `titulo` é a string vazia, quando `POST /livros` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Dados inválidos"}`.
+
+### RF-02 — Listar livros
+
+- **Descrição:** O sistema deve listar os livros do acervo.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** parâmetro de consulta opcional `status`, com valores aceitos `disponivel` ou `emprestado`.
+- **Processamento:** quando `status` for informado, retornar apenas os livros cujo `status` seja igual ao informado; quando ausente, retornar todos os livros.
+- **Saída:** lista de objetos `Livro` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-02.1** Dado um acervo com ao menos um livro cadastrado, quando `GET /livros` for chamado, então a resposta deve ter status `200`, o corpo deve ser uma lista JSON e deve conter um objeto cujo `id` é o do livro cadastrado.
+  - **CA-02.2** Dado um livro com `status` igual a `disponivel`, quando `GET /livros?status=disponivel` for chamado, então a resposta deve ter status `200` e todos os objetos da lista devem ter `status` igual a `disponivel`.
+  - **CA-02.3** Dado um parâmetro `status` com valor `inexistente`, quando `GET /livros?status=inexistente` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Dados inválidos"}`.
+
+### RF-03 — Consultar livro por identificador
+
+- **Descrição:** O sistema deve retornar os dados de um livro a partir do seu `id`.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** `id` do livro no caminho da rota.
+- **Processamento:** localizar o livro pelo `id`.
+- **Saída:** objeto `Livro` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-03.1** Dado um livro cadastrado, quando `GET /livros/{id}` for chamado com o `id` desse livro, então a resposta deve ter status `200` e o corpo deve conter o mesmo `id` e o mesmo `titulo` do livro cadastrado.
+  - **CA-03.2** Dado um `id` que não corresponde a nenhum livro, quando `GET /livros/{id}` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Livro não encontrado"}`.
+
+### RF-04 — Excluir livro
+
+- **Descrição:** O sistema deve excluir um livro do acervo.
+- **Ator:** Bibliotecário
+- **Prioridade:** Should
+- **Entrada:** `id` do livro no caminho da rota.
+- **Processamento:** localizar o livro pelo `id`; verificar RN-06; remover o livro do acervo.
+- **Saída:** corpo vazio com status `204`.
+- **Regras relacionadas:** RN-06
+- **Critérios de aceitação:**
+  - **CA-04.1** Dado um livro com `status` igual a `disponivel`, quando `DELETE /livros/{id}` for chamado, então a resposta deve ter status `204` e uma chamada seguinte a `GET /livros/{id}` deve retornar status `404`.
+  - **CA-04.2** Dado um `id` que não corresponde a nenhum livro, quando `DELETE /livros/{id}` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Livro não encontrado"}`.
+  - **CA-04.3** Dado um livro que possui empréstimo com `status` igual a `ativo`, quando `DELETE /livros/{id}` for chamado, então a resposta deve ter status `409` e corpo `{"erro": "Livro possui empréstimo ativo"}`.
+
+### RF-05 — Cadastrar usuário
+
+- **Descrição:** O sistema deve cadastrar um novo usuário.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** `nome` (string), `email` (string), `status` (string, opcional, valores aceitos `ativo` ou `inativo`)
+- **Processamento:** validar os campos conforme a Seção 5.2; verificar RN-09; gerar `id` sequencial; definir `status` com o valor informado ou `ativo` quando ausente; definir `multa_pendente` como `0.0`.
+- **Saída:** objeto `Usuario` completo com status `201`.
+- **Regras relacionadas:** RN-09
+- **Critérios de aceitação:**
+  - **CA-05.1** Dado um corpo válido com `nome` e `email` inéditos, quando `POST /usuarios` for chamado, então a resposta deve ter status `201` e o corpo deve conter `id` inteiro, `status` igual a `ativo` e `multa_pendente` igual a `0`.
+  - **CA-05.2** Dado um corpo cujo `email` não contém o caractere `@`, quando `POST /usuarios` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "E-mail inválido"}`.
+  - **CA-05.3** Dado um `email` já cadastrado em outro usuário, quando `POST /usuarios` for chamado, então a resposta deve ter status `409` e corpo `{"erro": "E-mail já cadastrado"}`.
+  - **CA-05.4** Dado um corpo cujo `nome` é a string vazia, quando `POST /usuarios` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Dados inválidos"}`.
+
+### RF-06 — Consultar usuário por identificador
+
+- **Descrição:** O sistema deve retornar os dados de um usuário a partir do seu `id`.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** `id` do usuário no caminho da rota.
+- **Processamento:** localizar o usuário pelo `id`.
+- **Saída:** objeto `Usuario` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-06.1** Dado um usuário cadastrado, quando `GET /usuarios/{id}` for chamado com o `id` desse usuário, então a resposta deve ter status `200` e o corpo deve conter o mesmo `id` e o mesmo `email` do usuário cadastrado.
+  - **CA-06.2** Dado um `id` que não corresponde a nenhum usuário, quando `GET /usuarios/{id}` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Usuário não encontrado"}`.
+
+### RF-07 — Registrar empréstimo
+
+- **Descrição:** O sistema deve registrar o empréstimo de um livro disponível a um usuário apto.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** `usuario_id` (inteiro), `livro_id` (inteiro), `data_emprestimo` (string no formato `AAAA-MM-DD`, opcional)
+- **Processamento:** localizar o usuário e o livro; verificar RN-03, RN-02, RN-01 e RN-05, nessa ordem; quando `data_emprestimo` estiver ausente, usar a data atual; calcular `data_devolucao_prevista` conforme RN-07; gerar `id` sequencial; definir `status` do empréstimo como `ativo`, `data_devolucao_real` como `null` e `multa` como `0.0`; alterar o `status` do livro para `emprestado`.
+- **Saída:** objeto `Emprestimo` completo com status `201`.
+- **Regras relacionadas:** RN-01, RN-02, RN-03, RN-05, RN-07
+- **Critérios de aceitação:**
+  - **CA-07.1** Dado um livro com `status` igual a `disponivel` e um usuário ativo sem empréstimos, quando `POST /emprestimos` for chamado, então a resposta deve ter status `201` e o corpo deve conter `id` inteiro, `status` igual a `ativo`, `data_devolucao_real` igual a `null` e `multa` igual a `0`.
+  - **CA-07.2** Dado um empréstimo registrado com sucesso, quando `GET /livros/{livro_id}` for chamado, então o `status` do livro deve ser `emprestado`.
+  - **CA-07.3** Dado um empréstimo registrado com `data_emprestimo` igual a `2026-01-01`, quando `POST /emprestimos` for chamado, então o campo `data_devolucao_prevista` do corpo da resposta deve ser `2026-01-15`.
+  - **CA-07.4** Dado um `usuario_id` que não corresponde a nenhum usuário, quando `POST /emprestimos` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Usuário não encontrado"}`.
+  - **CA-07.5** Dado um `livro_id` que não corresponde a nenhum livro e um `usuario_id` válido, quando `POST /emprestimos` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Livro não encontrado"}`.
+  - **CA-07.6** Dado um livro com `status` igual a `emprestado`, quando `POST /emprestimos` for chamado para outro usuário apto, então a resposta deve ter status `409` e corpo `{"erro": "Livro indisponível"}`.
+  - **CA-07.7** Dado um usuário com 3 empréstimos com `status` igual a `ativo`, quando `POST /emprestimos` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Limite de empréstimos atingido"}`.
+  - **CA-07.8** Dado um usuário com `multa_pendente` maior que `0`, quando `POST /emprestimos` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Usuário possui multa pendente"}`.
+  - **CA-07.9** Dado um usuário com `status` igual a `inativo`, quando `POST /emprestimos` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Usuário inativo"}`.
+
+### RF-08 — Registrar devolução
+
+- **Descrição:** O sistema deve registrar a devolução de um livro emprestado e calcular a multa por atraso.
+- **Ator:** Bibliotecário
+- **Prioridade:** Must
+- **Entrada:** `emprestimo_id` (inteiro), `data_devolucao` (string no formato `AAAA-MM-DD`, opcional)
+- **Processamento:** localizar o empréstimo; recusar quando o `status` do empréstimo já for `devolvido`; quando `data_devolucao` estiver ausente, usar a data atual; calcular a multa conforme RN-04; somar a multa ao `multa_pendente` do usuário conforme RN-10; definir `data_devolucao_real`, definir `status` do empréstimo como `devolvido`; alterar o `status` do livro para `disponivel`.
+- **Saída:** objeto `Emprestimo` atualizado com status `200`.
+- **Regras relacionadas:** RN-04, RN-10
+- **Critérios de aceitação:**
+  - **CA-08.1** Dado um empréstimo com `status` igual a `ativo`, quando `POST /devolucoes` for chamado, então a resposta deve ter status `200` e o corpo deve conter `status` igual a `devolvido` e `data_devolucao_real` diferente de `null`.
+  - **CA-08.2** Dada uma devolução registrada com sucesso, quando `GET /livros/{livro_id}` for chamado, então o `status` do livro deve ser `disponivel`.
+  - **CA-08.3** Dado um empréstimo com `data_emprestimo` igual a `2026-01-01` e `data_devolucao_prevista` igual a `2026-01-15`, quando `POST /devolucoes` for chamado com `data_devolucao` igual a `2026-01-21`, então o campo `multa` do corpo da resposta deve ser `9.0`.
+  - **CA-08.4** Dado um empréstimo devolvido com 6 dias de atraso, quando `GET /usuarios/{usuario_id}` for chamado, então o campo `multa_pendente` do usuário deve ser `9.0`.
+  - **CA-08.5** Dado um empréstimo com `data_devolucao_prevista` igual a `2026-01-15`, quando `POST /devolucoes` for chamado com `data_devolucao` igual a `2026-01-10`, então o campo `multa` do corpo da resposta deve ser `0`.
+  - **CA-08.6** Dado um `emprestimo_id` que não corresponde a nenhum empréstimo, quando `POST /devolucoes` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Empréstimo não encontrado"}`.
+  - **CA-08.7** Dado um empréstimo com `status` igual a `devolvido`, quando `POST /devolucoes` for chamado novamente para o mesmo `emprestimo_id`, então a resposta deve ter status `409` e corpo `{"erro": "Empréstimo já devolvido"}`.
+
+### RF-09 — Listar empréstimos de um usuário
+
+- **Descrição:** O sistema deve listar os empréstimos de um usuário.
+- **Ator:** Bibliotecário
+- **Prioridade:** Should
+- **Entrada:** `id` do usuário no caminho da rota; parâmetro de consulta opcional `status`, com valores aceitos `ativo` ou `devolvido`.
+- **Processamento:** localizar o usuário; quando `status` for informado, retornar apenas os empréstimos do usuário cujo `status` seja igual ao informado; quando ausente, retornar todos os empréstimos do usuário.
+- **Saída:** lista de objetos `Emprestimo` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-09.1** Dado um usuário com um empréstimo registrado, quando `GET /usuarios/{id}/emprestimos` for chamado, então a resposta deve ter status `200`, o corpo deve ser uma lista JSON e deve conter um objeto cujo `id` é o do empréstimo registrado.
+  - **CA-09.2** Dado um usuário com um empréstimo ativo e um empréstimo devolvido, quando `GET /usuarios/{id}/emprestimos?status=ativo` for chamado, então a resposta deve ter status `200` e todos os objetos da lista devem ter `status` igual a `ativo`.
+  - **CA-09.3** Dado um `id` que não corresponde a nenhum usuário, quando `GET /usuarios/{id}/emprestimos` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Usuário não encontrado"}`.
+
+### RF-10 — Quitar multa do usuário
+
+- **Descrição:** O sistema deve quitar integralmente a multa pendente de um usuário.
+- **Ator:** Bibliotecário
+- **Prioridade:** Should
+- **Entrada:** `id` do usuário no caminho da rota.
+- **Processamento:** localizar o usuário; recusar quando `multa_pendente` for igual a `0`; definir `multa_pendente` como `0.0`.
+- **Saída:** objeto `Usuario` atualizado com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-10.1** Dado um usuário com `multa_pendente` maior que `0`, quando `POST /usuarios/{id}/pagamento-multa` for chamado, então a resposta deve ter status `200` e o campo `multa_pendente` do corpo deve ser `0`.
+  - **CA-10.2** Dado um usuário com `multa_pendente` igual a `0`, quando `POST /usuarios/{id}/pagamento-multa` for chamado, então a resposta deve ter status `409` e corpo `{"erro": "Usuário não possui multa pendente"}`.
+  - **CA-10.3** Dado um `id` que não corresponde a nenhum usuário, quando `POST /usuarios/{id}/pagamento-multa` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Usuário não encontrado"}`.
+
+---
+
+## 8. Contratos de interface
+
+Todas as rotas usam o prefixo raiz `/`, sem versionamento e sem prefixo adicional.
+
+### 8.1 `POST /livros`
+
+- **Requisito:** RF-01
+- **Corpo da requisição (JSON exato):**
+
+```json
+{
+  "titulo": "Dom Casmurro",
+  "autor": "Machado de Assis",
+  "isbn": "9788525406958"
+}
+```
+
+- **Resposta de sucesso — status `201`:**
+
+```json
+{
+  "id": 1,
+  "titulo": "Dom Casmurro",
+  "autor": "Machado de Assis",
+  "isbn": "9788525406958",
+  "status": "disponivel"
+}
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | `isbn` não possui exatamente 13 dígitos | `{"erro": "ISBN inválido"}` |
+| `422` | `titulo` ou `autor` fora dos limites de tamanho, ausente ou de tipo incorreto | `{"erro": "Dados inválidos"}` |
+| `409` | `isbn` já cadastrado (RN-08) | `{"erro": "ISBN já cadastrado"}` |
+
+### 8.2 `GET /livros`
+
+- **Requisito:** RF-02
+- **Parâmetro de consulta:** `status` (opcional), valores aceitos `disponivel` ou `emprestado`
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:**
+
+```json
+[
+  {
+    "id": 1,
+    "titulo": "Dom Casmurro",
+    "autor": "Machado de Assis",
+    "isbn": "9788525406958",
+    "status": "disponivel"
+  }
+]
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | `status` com valor fora dos aceitos | `{"erro": "Dados inválidos"}` |
+
+Quando não houver livro algum, a resposta é status `200` com corpo `[]`.
+
+### 8.3 `GET /livros/{id}`
+
+- **Requisito:** RF-03
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** objeto `Livro`, idêntico em formato ao retornado por `POST /livros`.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum livro | `{"erro": "Livro não encontrado"}` |
+
+### 8.4 `DELETE /livros/{id}`
+
+- **Requisito:** RF-04
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `204`:** corpo vazio.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum livro | `{"erro": "Livro não encontrado"}` |
+| `409` | livro possui empréstimo ativo (RN-06) | `{"erro": "Livro possui empréstimo ativo"}` |
+
+### 8.5 `POST /usuarios`
+
+- **Requisito:** RF-05
+- **Corpo da requisição (JSON exato):**
+
+```json
+{
+  "nome": "Maria Silva",
+  "email": "maria@exemplo.com"
+}
+```
+
+O campo `status` é opcional e aceita os valores `ativo` ou `inativo`; quando ausente, o sistema usa `ativo`.
+
+- **Resposta de sucesso — status `201`:**
+
+```json
+{
+  "id": 1,
+  "nome": "Maria Silva",
+  "email": "maria@exemplo.com",
+  "status": "ativo",
+  "multa_pendente": 0.0
+}
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | `email` não satisfaz a validação da Seção 5.2 | `{"erro": "E-mail inválido"}` |
+| `422` | `nome` fora dos limites de tamanho, ausente ou de tipo incorreto, ou `status` com valor fora dos aceitos | `{"erro": "Dados inválidos"}` |
+| `409` | `email` já cadastrado (RN-09) | `{"erro": "E-mail já cadastrado"}` |
+
+### 8.6 `GET /usuarios/{id}`
+
+- **Requisito:** RF-06
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** objeto `Usuario`, idêntico em formato ao retornado por `POST /usuarios`.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum usuário | `{"erro": "Usuário não encontrado"}` |
+
+### 8.7 `POST /emprestimos`
+
+- **Requisito:** RF-07
+- **Corpo da requisição (JSON exato):**
+
+```json
+{
+  "usuario_id": 1,
+  "livro_id": 1,
+  "data_emprestimo": "2026-01-01"
+}
+```
+
+O campo `data_emprestimo` é opcional; quando ausente, o sistema usa a data atual.
+
+- **Resposta de sucesso — status `201`:**
+
+```json
+{
+  "id": 1,
+  "usuario_id": 1,
+  "livro_id": 1,
+  "data_emprestimo": "2026-01-01",
+  "data_devolucao_prevista": "2026-01-15",
+  "data_devolucao_real": null,
+  "multa": 0.0,
+  "status": "ativo"
+}
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | corpo malformado, campo ausente ou de tipo incorreto | `{"erro": "Dados inválidos"}` |
+| `404` | `usuario_id` não corresponde a nenhum usuário | `{"erro": "Usuário não encontrado"}` |
+| `404` | `livro_id` não corresponde a nenhum livro | `{"erro": "Livro não encontrado"}` |
+| `422` | usuário com `status` igual a `inativo` (RN-03) | `{"erro": "Usuário inativo"}` |
+| `422` | usuário com `multa_pendente` maior que `0` (RN-02) | `{"erro": "Usuário possui multa pendente"}` |
+| `422` | usuário com 3 empréstimos ativos (RN-01) | `{"erro": "Limite de empréstimos atingido"}` |
+| `409` | livro com `status` igual a `emprestado` (RN-05) | `{"erro": "Livro indisponível"}` |
+
+### 8.8 `POST /devolucoes`
+
+- **Requisito:** RF-08
+- **Corpo da requisição (JSON exato):**
+
+```json
+{
+  "emprestimo_id": 1,
+  "data_devolucao": "2026-01-21"
+}
+```
+
+O campo `data_devolucao` é opcional; quando ausente, o sistema usa a data atual.
+
+- **Resposta de sucesso — status `200`:**
+
+```json
+{
+  "id": 1,
+  "usuario_id": 1,
+  "livro_id": 1,
+  "data_emprestimo": "2026-01-01",
+  "data_devolucao_prevista": "2026-01-15",
+  "data_devolucao_real": "2026-01-21",
+  "multa": 9.0,
+  "status": "devolvido"
+}
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | corpo malformado, campo ausente ou de tipo incorreto | `{"erro": "Dados inválidos"}` |
+| `404` | `emprestimo_id` não corresponde a nenhum empréstimo | `{"erro": "Empréstimo não encontrado"}` |
+| `409` | empréstimo com `status` igual a `devolvido` | `{"erro": "Empréstimo já devolvido"}` |
+
+### 8.9 `GET /usuarios/{id}/emprestimos`
+
+- **Requisito:** RF-09
+- **Parâmetro de consulta:** `status` (opcional), valores aceitos `ativo` ou `devolvido`
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** lista de objetos `Emprestimo`, cada um idêntico em formato ao retornado por `POST /emprestimos`.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum usuário | `{"erro": "Usuário não encontrado"}` |
+| `422` | `status` com valor fora dos aceitos | `{"erro": "Dados inválidos"}` |
+
+Quando o usuário não possuir empréstimos, a resposta é status `200` com corpo `[]`.
+
+### 8.10 `POST /usuarios/{id}/pagamento-multa`
+
+- **Requisito:** RF-10
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** objeto `Usuario` atualizado, com `multa_pendente` igual a `0.0`.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum usuário | `{"erro": "Usuário não encontrado"}` |
+| `409` | usuário com `multa_pendente` igual a `0` | `{"erro": "Usuário não possui multa pendente"}` |
+
+---
+
+## 9. Requisitos não funcionais
+
+| ID | Categoria | Requisito mensurável | Como verificar |
+|---|---|---|---|
+| RNF-01 | Estrutura | O código deve seguir exatamente a árvore de arquivos definida na Seção 11.1. | Inspeção binária |
+| RNF-02 | Portabilidade | A aplicação deve iniciar com o comando `uvicorn app.main:app`, sem nenhuma etapa manual anterior além da instalação das bibliotecas permitidas. | Inspeção binária |
+| RNF-03 | Dependências | O código não deve importar nenhuma biblioteca fora da lista de permitidas da Seção 4. | Inspeção binária |
+| RNF-04 | Formato de erro | Toda resposta de erro do sistema deve ter corpo no formato `{"erro": "<mensagem>"}`, com a chave `erro` como única chave do objeto. | Teste automatizado |
+| RNF-05 | Desempenho | O sistema deve responder a `GET /livros` em até 500 ms com 200 livros cadastrados. | Teste automatizado |
+
+---
+
+## 10. Tratamento de erros (padrão global)
+
+- **Formato único de resposta de erro:**
+
+```json
+{
+  "erro": "mensagem exata definida na Seção 8"
+}
+```
+
+O objeto de erro possui **exatamente uma chave**, chamada `erro`, cujo valor é uma string. Nenhuma resposta de erro pode usar a chave `detail`, `message`, `error` ou qualquer outra.
+
+- **Tabela de status HTTP e seu significado neste sistema:**
+
+| Status | Uso neste sistema |
+|---|---|
+| `200` | Consulta, listagem ou atualização realizada com sucesso |
+| `201` | Recurso criado com sucesso |
+| `204` | Exclusão realizada com sucesso, sem corpo de resposta |
+| `404` | Recurso referenciado por identificador não existe |
+| `409` | Conflito com o estado atual do sistema (duplicidade ou violação de estado) |
+| `422` | Dados de entrada inválidos ou violação de regra de negócio que não seja conflito de estado |
+
+- **Precedência de validação:** quando mais de uma condição de erro se aplica à mesma requisição, o sistema retorna o erro de maior precedência, na ordem abaixo:
+
+  1. Corpo malformado, campo obrigatório ausente ou de tipo incorreto → `422`
+  2. Parâmetro de consulta com valor fora dos aceitos → `422`
+  3. Recurso referenciado por identificador não existe → `404`
+  4. Violação de regra de negócio relativa ao usuário, na ordem RN-03, RN-02, RN-01 → `422`
+  5. Violação de regra de negócio relativa ao livro ou ao estado do empréstimo → `409`
+
+  Em `POST /emprestimos`, quando `usuario_id` e `livro_id` forem ambos inexistentes, o sistema retorna `{"erro": "Usuário não encontrado"}`.
+
+  Dentro do item 1 da lista acima, as validações de formato que possuem mensagem própria têm precedência sobre a mensagem genérica `Dados inválidos`: um `isbn` presente e do tipo string, mas que não possua exatamente 13 dígitos, retorna `{"erro": "ISBN inválido"}`; um `email` presente e do tipo string, mas que não satisfaça a validação da Seção 5.2, retorna `{"erro": "E-mail inválido"}`.
+
+---
+
+## 11. Instruções de geração para a LLM
+
+### 11.1 Estrutura de arquivos esperada
+
+```
+app/
+├── __init__.py
+├── main.py
+├── models.py
+└── storage.py
+```
+
+- `app/main.py` — instância da aplicação FastAPI e todas as rotas.
+- `app/models.py` — modelos Pydantic de entrada e saída.
+- `app/storage.py` — estruturas de dados em memória e geração de identificadores.
+- `app/__init__.py` — arquivo vazio.
+
+Nenhum outro arquivo ou pasta deve ser criado.
+
+### 11.2 Ponto de entrada
+
+A aplicação deve ser inicializável pelo comando `uvicorn app.main:app`, executado a partir da pasta que contém a pasta `app`, com o objeto `app` (instância de `FastAPI`) exposto no módulo `app/main.py`.
+
+### 11.3 Regras de geração
+
+1. Entregue **arquivos completos**, sem trechos omitidos, sem `...`, sem "restante igual ao anterior".
+2. **Não** implemente nada que não esteja neste documento, inclusive o que estiver listado na Seção 2.2.
+3. **Não** altere nomes de campos, rotas, status HTTP ou mensagens de erro: use exatamente os desta especificação, com acentuação idêntica.
+4. **Não** use bibliotecas fora da lista de permitidas da Seção 4.
+5. Em caso de ambiguidade, implemente a leitura **mais literal** do texto; não adicione comportamento "razoável" não especificado.
+6. Não escreva testes, README, Dockerfile ou documentação, salvo se a Seção 11.1 os incluir.
+7. Atenção ao formato de erro: o comportamento padrão do FastAPI para erros de validação **não** atende à Seção 10; é necessário tratar as respostas de erro para que sigam o formato `{"erro": "<mensagem>"}`.
+
+---
+
+## 12. Matriz de rastreabilidade
+
+| Requisito | Critérios de aceitação | Regras | Endpoint | Caso de teste |
+|---|---|---|---|---|
+| RF-01 | CA-01.1 a CA-01.4 | RN-08 | `POST /livros` | `test_rf01_livros.py` |
+| RF-02 | CA-02.1 a CA-02.3 | — | `GET /livros` | `test_rf02_listar_livros.py` |
+| RF-03 | CA-03.1, CA-03.2 | — | `GET /livros/{id}` | `test_rf03_consultar_livro.py` |
+| RF-04 | CA-04.1 a CA-04.3 | RN-06 | `DELETE /livros/{id}` | `test_rf04_excluir_livro.py` |
+| RF-05 | CA-05.1 a CA-05.4 | RN-09 | `POST /usuarios` | `test_rf05_usuarios.py` |
+| RF-06 | CA-06.1, CA-06.2 | — | `GET /usuarios/{id}` | `test_rf06_consultar_usuario.py` |
+| RF-07 | CA-07.1 a CA-07.9 | RN-01, RN-02, RN-03, RN-05, RN-07 | `POST /emprestimos` | `test_rf07_emprestimos.py` |
+| RF-08 | CA-08.1 a CA-08.7 | RN-04, RN-10 | `POST /devolucoes` | `test_rf08_devolucoes.py` |
+| RF-09 | CA-09.1 a CA-09.3 | — | `GET /usuarios/{id}/emprestimos` | `test_rf09_listar_emprestimos.py` |
+| RF-10 | CA-10.1 a CA-10.3 | — | `POST /usuarios/{id}/pagamento-multa` | `test_rf10_pagamento_multa.py` |
+| RNF-04 | — | — | todos | `test_rnf.py` |
+| RNF-05 | — | — | `GET /livros` | `test_rnf.py` |
+
+**Total de critérios de aceitação funcionais:** 40
+
+---
+
+## 13. Controle de versões do documento
+
+| Versão | Data | Autor | Mudança |
+|---|---|---|---|
+| 1.0 | 2026-09-19 | Grupo AED | Versão inicial, usada na rodada v1 do experimento |

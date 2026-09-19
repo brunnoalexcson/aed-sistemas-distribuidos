@@ -1,0 +1,10 @@
+{
+  "auditado_em": "2026-09-19T23:32:06.743695+00:00",
+  "arquivos_protegidos": 219,
+  "arquivos_arquivados": 11,
+  "execucoes_comparadas": 20,
+  "divergencias_historicas": [],
+  "erros": [],
+  "aprovado": true,
+  "alcance": "Integridade desde o início desta revisão; não comprova procedência anterior das gerações."
+}

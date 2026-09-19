@@ -1,0 +1,463 @@
+Implemente o sistema de software descrito na especificação abaixo.
+
+Condições da tarefa:
+1. Escreva todos os arquivos do sistema dentro do diretório /home/caio/Documents/PUC/2026.02 Sistemas Distribuidos/Agente_Especificacao/aed-sistemas-distribuidos/experimento/resultados/execucoes/C/run-06. Não crie
+   nem modifique nenhum arquivo fora desse diretório.
+2. Não leia nenhum arquivo do repositório. A especificação abaixo é a única fonte
+   de informação sobre o sistema.
+3. Entregue arquivos completos e funcionais, sem trechos omitidos e sem
+   marcadores de continuação.
+4. Não escreva testes automatizados.
+5. Não peça esclarecimentos e não faça perguntas: implemente a partir do que está
+   escrito abaixo.
+6. Ao terminar, responda apenas com a lista dos arquivos que você criou.
+
+ESPECIFICAÇÃO:
+
+# Documento de Especificação de Requisitos — Sistema de Controle de Estoque
+
+## 0. Metadados
+
+| Campo | Valor |
+|---|---|
+| Nome do sistema | Sistema de Controle de Estoque |
+| Versão do documento | 1.0 |
+| Versão do template | 1.0 |
+| Autores | Grupo AED — Sistemas Distribuídos |
+| Revisor (não pode ser autor) | Revisor designado do grupo |
+| Data | 2026-09-19 |
+| Status | Aprovado |
+
+---
+
+## 1. Objetivo do sistema
+
+O sistema permite que almoxarifes registrem entradas e saídas de produtos para controlar o saldo em estoque e identificar produtos abaixo do nível mínimo.
+
+---
+
+## 2. Escopo
+
+### 2.1 Incluído
+
+- Cadastro, consulta e listagem de produtos.
+- Registro de movimentações de entrada e de saída.
+- Consulta das movimentações de um produto.
+- Consulta dos produtos com saldo abaixo do estoque mínimo.
+
+### 2.2 Explicitamente excluído
+
+O sistema **não** implementa:
+
+- Autenticação, autorização ou controle de sessão.
+- Interface web, HTML, CSS ou qualquer front-end.
+- Persistência em disco, banco de dados, arquivos ou ORM.
+- Exclusão ou alteração de produtos já cadastrados.
+- Estorno, cancelamento ou alteração de movimentações.
+- Fornecedores, pedidos de compra, preços ou valores financeiros.
+- Múltiplos depósitos ou localização física dos produtos.
+- Envio de e-mail, notificações ou mensageria.
+- Paginação, ordenação configurável ou busca textual.
+- Logging estruturado, métricas ou monitoramento.
+- Docker, docker-compose, CI, Makefile ou scripts de deploy.
+- Testes automatizados, README ou documentação adicional.
+
+---
+
+## 3. Glossário
+
+| Termo | Definição |
+|---|---|
+| Produto | Item controlado pelo estoque, identificado por `id` próprio e por um `sku` único. |
+| SKU | Código identificador do produto no estoque, com formato definido na Seção 5.1. |
+| Saldo | Valor atual do campo `quantidade` de um produto. |
+| Movimentação | Registro de entrada ou de saída de uma quantidade de um produto. Uma vez registrada, não é alterada nem cancelada. |
+| Entrada | Movimentação que aumenta o saldo do produto. |
+| Saída | Movimentação que diminui o saldo do produto. |
+| Estoque mínimo | Valor do campo `estoque_minimo` do produto, abaixo do qual o produto é considerado em alerta. |
+| Produto em alerta | Produto cujo `quantidade` é estritamente menor que seu `estoque_minimo`. |
+
+---
+
+## 4. Stack técnica e restrições de implementação
+
+| Item | Especificação obrigatória |
+|---|---|
+| Linguagem / versão | Python 3.11 ou superior |
+| Framework | FastAPI |
+| Validação de dados | Pydantic v2 |
+| Servidor de aplicação | Uvicorn |
+| Persistência | Em memória, no processo, usando estruturas de dados nativas do Python (`dict` e `list`). O estado é perdido ao encerrar o processo, e isso é aceito. |
+| Bibliotecas permitidas | Apenas `fastapi`, `pydantic`, `uvicorn` e a biblioteca padrão do Python. |
+| Bibliotecas proibidas | `sqlalchemy`, qualquer ORM, qualquer banco de dados (incluindo `sqlite3`), `requests`, `httpx`, bibliotecas de autenticação, bibliotecas de logging de terceiros, qualquer pacote não listado como permitido. |
+
+---
+
+## 5. Modelo de dados
+
+### 5.1 Entidade: Produto
+
+| Atributo | Tipo | Obrigatório | Restrições / validação | Exemplo |
+|---|---|---|---|---|
+| `id` | inteiro | Não (gerado pelo sistema) | Gerado pelo sistema, sequencial, iniciando em `1`, nunca reaproveitado | `1` |
+| `nome` | string | Sim | Entre 1 e 100 caracteres, após remoção de espaços nas extremidades | `"Parafuso M6"` |
+| `sku` | string | Sim | Exatamente 8 caracteres, contendo apenas letras maiúsculas de `A` a `Z` e dígitos de `0` a `9`; único no sistema | `"PARM6001"` |
+| `estoque_minimo` | inteiro | Sim | Maior ou igual a `0` | `10` |
+| `quantidade` | inteiro | Não (definido pelo sistema) | Maior ou igual a `0` | `0` |
+
+**Valor inicial de `quantidade`:** `0`
+
+### 5.2 Entidade: Movimentacao
+
+| Atributo | Tipo | Obrigatório | Restrições / validação | Exemplo |
+|---|---|---|---|---|
+| `id` | inteiro | Não (gerado pelo sistema) | Gerado pelo sistema, sequencial, iniciando em `1`, nunca reaproveitado | `1` |
+| `produto_id` | inteiro | Sim | Deve referenciar um `Produto` existente | `1` |
+| `tipo` | string | Sim | Um de: `entrada`, `saida` | `"entrada"` |
+| `quantidade` | inteiro | Sim | Estritamente maior que `0` | `50` |
+| `data` | string | Não | Data no formato `AAAA-MM-DD`. Quando ausente, o sistema usa a data atual | `"2026-09-19"` |
+| `saldo_apos` | inteiro | Não (calculado pelo sistema) | Saldo do produto após a aplicação desta movimentação | `50` |
+
+**Estados possíveis de `tipo`:** `entrada`, `saida` · **não possui valor padrão: o campo é obrigatório**
+
+---
+
+## 6. Regras de negócio
+
+| ID | Regra | Requisitos afetados |
+|---|---|---|
+| RN-01 | Uma movimentação de `tipo` igual a `entrada` soma sua `quantidade` ao `quantidade` do produto. | RF-04 |
+| RN-02 | Uma movimentação de `tipo` igual a `saida` subtrai sua `quantidade` do `quantidade` do produto. | RF-05 |
+| RN-03 | Uma movimentação de `tipo` igual a `saida` cuja `quantidade` seja maior que o `quantidade` atual do produto não pode ser registrada. | RF-05 |
+| RN-04 | O campo `sku` é único entre todos os produtos cadastrados. | RF-01 |
+| RN-05 | Um produto está em alerta quando seu `quantidade` é estritamente menor que seu `estoque_minimo`. | RF-07 |
+
+---
+
+## 7. Requisitos funcionais
+
+### RF-01 — Cadastrar produto
+
+- **Descrição:** O sistema deve cadastrar um novo produto no estoque.
+- **Ator:** Almoxarife
+- **Prioridade:** Must
+- **Entrada:** `nome` (string), `sku` (string), `estoque_minimo` (inteiro)
+- **Processamento:** validar os campos conforme a Seção 5.1; verificar RN-04; gerar `id` sequencial; definir `quantidade` como `0`.
+- **Saída:** objeto `Produto` completo com status `201`.
+- **Regras relacionadas:** RN-04
+- **Critérios de aceitação:**
+  - **CA-01.1** Dado um corpo válido com `nome`, `sku` inédito e `estoque_minimo`, quando `POST /produtos` for chamado, então a resposta deve ter status `201` e o corpo deve conter `id` inteiro, o mesmo `nome` enviado e `quantidade` igual a `0`.
+  - **CA-01.2** Dado um corpo cujo `sku` possui 5 caracteres, quando `POST /produtos` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "SKU inválido"}`.
+  - **CA-01.3** Dado um `sku` já cadastrado em outro produto, quando `POST /produtos` for chamado, então a resposta deve ter status `409` e corpo `{"erro": "SKU já cadastrado"}`.
+  - **CA-01.4** Dado um corpo cujo `estoque_minimo` é `-1`, quando `POST /produtos` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Dados inválidos"}`.
+
+### RF-02 — Listar produtos
+
+- **Descrição:** O sistema deve listar os produtos cadastrados.
+- **Ator:** Almoxarife
+- **Prioridade:** Must
+- **Entrada:** nenhuma.
+- **Processamento:** retornar todos os produtos cadastrados.
+- **Saída:** lista de objetos `Produto` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-02.1** Dado um estoque com ao menos um produto cadastrado, quando `GET /produtos` for chamado, então a resposta deve ter status `200`, o corpo deve ser uma lista JSON e deve conter um objeto cujo `id` é o do produto cadastrado.
+  - **CA-02.2** Dado um produto cadastrado, quando `GET /produtos` for chamado, então o objeto correspondente na lista deve conter as chaves `id`, `nome`, `sku`, `estoque_minimo` e `quantidade`.
+
+### RF-03 — Consultar produto por identificador
+
+- **Descrição:** O sistema deve retornar os dados de um produto a partir do seu `id`.
+- **Ator:** Almoxarife
+- **Prioridade:** Must
+- **Entrada:** `id` do produto no caminho da rota.
+- **Processamento:** localizar o produto pelo `id`.
+- **Saída:** objeto `Produto` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-03.1** Dado um produto cadastrado, quando `GET /produtos/{id}` for chamado com o `id` desse produto, então a resposta deve ter status `200` e o corpo deve conter o mesmo `id` e o mesmo `sku` do produto cadastrado.
+  - **CA-03.2** Dado um `id` que não corresponde a nenhum produto, quando `GET /produtos/{id}` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Produto não encontrado"}`.
+
+### RF-04 — Registrar entrada de estoque
+
+- **Descrição:** O sistema deve registrar uma movimentação de entrada, aumentando o saldo do produto.
+- **Ator:** Almoxarife
+- **Prioridade:** Must
+- **Entrada:** `produto_id` (inteiro), `tipo` (string igual a `entrada`), `quantidade` (inteiro), `data` (string no formato `AAAA-MM-DD`, opcional)
+- **Processamento:** localizar o produto; validar os campos conforme a Seção 5.2; aplicar RN-01; gerar `id` sequencial; registrar `saldo_apos` com o saldo resultante.
+- **Saída:** objeto `Movimentacao` completo com status `201`.
+- **Regras relacionadas:** RN-01
+- **Critérios de aceitação:**
+  - **CA-04.1** Dado um produto com `quantidade` igual a `0`, quando `POST /movimentacoes` for chamado com `tipo` igual a `entrada` e `quantidade` igual a `50`, então a resposta deve ter status `201` e o campo `saldo_apos` do corpo deve ser `50`.
+  - **CA-04.2** Dada uma entrada de `50` unidades registrada com sucesso, quando `GET /produtos/{id}` for chamado, então o campo `quantidade` do produto deve ser `50`.
+  - **CA-04.3** Dado um `produto_id` que não corresponde a nenhum produto, quando `POST /movimentacoes` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Produto não encontrado"}`.
+  - **CA-04.4** Dado um corpo cuja `quantidade` é `0`, quando `POST /movimentacoes` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Dados inválidos"}`.
+  - **CA-04.5** Dado um corpo cujo `tipo` é `transferencia`, quando `POST /movimentacoes` for chamado, então a resposta deve ter status `422` e corpo `{"erro": "Dados inválidos"}`.
+
+### RF-05 — Registrar saída de estoque
+
+- **Descrição:** O sistema deve registrar uma movimentação de saída, diminuindo o saldo do produto.
+- **Ator:** Almoxarife
+- **Prioridade:** Must
+- **Entrada:** `produto_id` (inteiro), `tipo` (string igual a `saida`), `quantidade` (inteiro), `data` (string no formato `AAAA-MM-DD`, opcional)
+- **Processamento:** localizar o produto; validar os campos conforme a Seção 5.2; verificar RN-03; aplicar RN-02; gerar `id` sequencial; registrar `saldo_apos` com o saldo resultante.
+- **Saída:** objeto `Movimentacao` completo com status `201`.
+- **Regras relacionadas:** RN-02, RN-03
+- **Critérios de aceitação:**
+  - **CA-05.1** Dado um produto com `quantidade` igual a `50`, quando `POST /movimentacoes` for chamado com `tipo` igual a `saida` e `quantidade` igual a `20`, então a resposta deve ter status `201` e o campo `saldo_apos` do corpo deve ser `30`.
+  - **CA-05.2** Dada uma saída de `20` unidades registrada com sucesso sobre saldo de `50`, quando `GET /produtos/{id}` for chamado, então o campo `quantidade` do produto deve ser `30`.
+  - **CA-05.3** Dado um produto com `quantidade` igual a `50`, quando `POST /movimentacoes` for chamado com `tipo` igual a `saida` e `quantidade` igual a `51`, então a resposta deve ter status `409` e corpo `{"erro": "Quantidade insuficiente em estoque"}`.
+  - **CA-05.4** Dado um produto com `quantidade` igual a `50`, quando `POST /movimentacoes` for chamado com `tipo` igual a `saida` e `quantidade` igual a `50`, então a resposta deve ter status `201` e o campo `saldo_apos` do corpo deve ser `0`.
+
+### RF-06 — Listar movimentações de um produto
+
+- **Descrição:** O sistema deve listar as movimentações de um produto.
+- **Ator:** Almoxarife
+- **Prioridade:** Should
+- **Entrada:** `id` do produto no caminho da rota; parâmetro de consulta opcional `tipo`, com valores aceitos `entrada` ou `saida`.
+- **Processamento:** localizar o produto; quando `tipo` for informado, retornar apenas as movimentações do produto cujo `tipo` seja igual ao informado; quando ausente, retornar todas as movimentações do produto.
+- **Saída:** lista de objetos `Movimentacao` com status `200`.
+- **Regras relacionadas:** nenhuma
+- **Critérios de aceitação:**
+  - **CA-06.1** Dado um produto com uma entrada registrada, quando `GET /produtos/{id}/movimentacoes` for chamado, então a resposta deve ter status `200`, o corpo deve ser uma lista JSON e deve conter um objeto cujo `id` é o da movimentação registrada.
+  - **CA-06.2** Dado um produto com uma entrada e uma saída registradas, quando `GET /produtos/{id}/movimentacoes?tipo=saida` for chamado, então a resposta deve ter status `200` e todos os objetos da lista devem ter `tipo` igual a `saida`.
+  - **CA-06.3** Dado um `id` que não corresponde a nenhum produto, quando `GET /produtos/{id}/movimentacoes` for chamado, então a resposta deve ter status `404` e corpo `{"erro": "Produto não encontrado"}`.
+
+### RF-07 — Consultar produtos em alerta de estoque mínimo
+
+- **Descrição:** O sistema deve listar os produtos cujo saldo está abaixo do estoque mínimo.
+- **Ator:** Almoxarife
+- **Prioridade:** Must
+- **Entrada:** nenhuma.
+- **Processamento:** aplicar RN-05 a todos os produtos cadastrados e retornar os que estiverem em alerta.
+- **Saída:** lista de objetos `Produto` com status `200`.
+- **Regras relacionadas:** RN-05
+- **Critérios de aceitação:**
+  - **CA-07.1** Dado um produto com `estoque_minimo` igual a `10` e `quantidade` igual a `0`, quando `GET /alertas` for chamado, então a resposta deve ter status `200` e a lista deve conter um objeto cujo `id` é o desse produto.
+  - **CA-07.2** Dado um produto com `estoque_minimo` igual a `10` e `quantidade` igual a `20`, quando `GET /alertas` for chamado, então a lista não deve conter nenhum objeto cujo `id` seja o desse produto.
+  - **CA-07.3** Dado um produto com `estoque_minimo` igual a `10` e `quantidade` igual a `10`, quando `GET /alertas` for chamado, então a lista não deve conter nenhum objeto cujo `id` seja o desse produto.
+
+---
+
+## 8. Contratos de interface
+
+Todas as rotas usam o prefixo raiz `/`, sem versionamento e sem prefixo adicional.
+
+### 8.1 `POST /produtos`
+
+- **Requisito:** RF-01
+- **Corpo da requisição (JSON exato):**
+
+```json
+{
+  "nome": "Parafuso M6",
+  "sku": "PARM6001",
+  "estoque_minimo": 10
+}
+```
+
+- **Resposta de sucesso — status `201`:**
+
+```json
+{
+  "id": 1,
+  "nome": "Parafuso M6",
+  "sku": "PARM6001",
+  "estoque_minimo": 10,
+  "quantidade": 0
+}
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | `sku` não satisfaz a validação da Seção 5.1 | `{"erro": "SKU inválido"}` |
+| `422` | `nome` ou `estoque_minimo` inválido, ausente ou de tipo incorreto | `{"erro": "Dados inválidos"}` |
+| `409` | `sku` já cadastrado (RN-04) | `{"erro": "SKU já cadastrado"}` |
+
+### 8.2 `GET /produtos`
+
+- **Requisito:** RF-02
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** lista de objetos `Produto`, cada um idêntico em formato ao retornado por `POST /produtos`.
+- **Respostas de erro:** nenhuma.
+
+Quando não houver produto algum, a resposta é status `200` com corpo `[]`.
+
+### 8.3 `GET /produtos/{id}`
+
+- **Requisito:** RF-03
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** objeto `Produto`.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum produto | `{"erro": "Produto não encontrado"}` |
+
+### 8.4 `POST /movimentacoes`
+
+- **Requisitos:** RF-04 e RF-05
+- **Corpo da requisição (JSON exato):**
+
+```json
+{
+  "produto_id": 1,
+  "tipo": "entrada",
+  "quantidade": 50,
+  "data": "2026-09-19"
+}
+```
+
+O campo `data` é opcional; quando ausente, o sistema usa a data atual.
+
+- **Resposta de sucesso — status `201`:**
+
+```json
+{
+  "id": 1,
+  "produto_id": 1,
+  "tipo": "entrada",
+  "quantidade": 50,
+  "data": "2026-09-19",
+  "saldo_apos": 50
+}
+```
+
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `422` | corpo malformado, campo ausente, de tipo incorreto, `tipo` fora dos valores aceitos ou `quantidade` menor ou igual a `0` | `{"erro": "Dados inválidos"}` |
+| `404` | `produto_id` não corresponde a nenhum produto | `{"erro": "Produto não encontrado"}` |
+| `409` | saída com `quantidade` maior que o saldo do produto (RN-03) | `{"erro": "Quantidade insuficiente em estoque"}` |
+
+### 8.5 `GET /produtos/{id}/movimentacoes`
+
+- **Requisito:** RF-06
+- **Parâmetro de consulta:** `tipo` (opcional), valores aceitos `entrada` ou `saida`
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** lista de objetos `Movimentacao`.
+- **Respostas de erro:**
+
+| Status | Condição | Corpo exato |
+|---|---|---|
+| `404` | `id` não corresponde a nenhum produto | `{"erro": "Produto não encontrado"}` |
+| `422` | `tipo` com valor fora dos aceitos | `{"erro": "Dados inválidos"}` |
+
+Quando o produto não possuir movimentações, a resposta é status `200` com corpo `[]`.
+
+### 8.6 `GET /alertas`
+
+- **Requisito:** RF-07
+- **Corpo da requisição:** nenhum
+- **Resposta de sucesso — status `200`:** lista de objetos `Produto` em alerta (RN-05).
+- **Respostas de erro:** nenhuma.
+
+Quando nenhum produto estiver em alerta, a resposta é status `200` com corpo `[]`.
+
+---
+
+## 9. Requisitos não funcionais
+
+| ID | Categoria | Requisito mensurável | Como verificar |
+|---|---|---|---|
+| RNF-01 | Estrutura | O código deve seguir exatamente a árvore de arquivos definida na Seção 11.1. | Inspeção binária |
+| RNF-02 | Portabilidade | A aplicação deve iniciar com o comando `uvicorn app.main:app`, sem nenhuma etapa manual anterior além da instalação das bibliotecas permitidas. | Inspeção binária |
+| RNF-03 | Dependências | O código não deve importar nenhuma biblioteca fora da lista de permitidas da Seção 4. | Inspeção binária |
+| RNF-04 | Formato de erro | Toda resposta de erro do sistema deve ter corpo no formato `{"erro": "<mensagem>"}`, com a chave `erro` como única chave do objeto. | Teste automatizado |
+| RNF-05 | Desempenho | O sistema deve responder a `GET /produtos` em até 500 ms com 200 produtos cadastrados. | Teste automatizado |
+
+---
+
+## 10. Tratamento de erros (padrão global)
+
+- **Formato único de resposta de erro:**
+
+```json
+{
+  "erro": "mensagem exata definida na Seção 8"
+}
+```
+
+O objeto de erro possui **exatamente uma chave**, chamada `erro`, cujo valor é uma string. Nenhuma resposta de erro pode usar a chave `detail`, `message`, `error` ou qualquer outra.
+
+- **Tabela de status HTTP e seu significado neste sistema:**
+
+| Status | Uso neste sistema |
+|---|---|
+| `200` | Consulta ou listagem realizada com sucesso |
+| `201` | Recurso criado com sucesso |
+| `404` | Recurso referenciado por identificador não existe |
+| `409` | Conflito com o estado atual do sistema (duplicidade ou saldo insuficiente) |
+| `422` | Dados de entrada inválidos |
+
+- **Precedência de validação:** quando mais de uma condição de erro se aplica à mesma requisição, o sistema retorna o erro de maior precedência, na ordem abaixo:
+
+  1. Corpo malformado, campo obrigatório ausente, de tipo incorreto ou com valor fora do permitido → `422`
+  2. Parâmetro de consulta com valor fora dos aceitos → `422`
+  3. Recurso referenciado por identificador não existe → `404`
+  4. Violação de regra de negócio relativa ao saldo ou à duplicidade → `409`
+
+  Dentro do item 1, as validações de formato que possuem mensagem própria têm precedência sobre a mensagem genérica `Dados inválidos`: um `sku` presente e do tipo string, mas que não satisfaça a validação da Seção 5.1, retorna `{"erro": "SKU inválido"}`.
+
+---
+
+## 11. Instruções de geração para a LLM
+
+### 11.1 Estrutura de arquivos esperada
+
+```
+app/
+├── __init__.py
+├── main.py
+├── models.py
+└── storage.py
+```
+
+- `app/main.py` — instância da aplicação FastAPI e todas as rotas.
+- `app/models.py` — modelos Pydantic de entrada e saída.
+- `app/storage.py` — estruturas de dados em memória e geração de identificadores.
+- `app/__init__.py` — arquivo vazio.
+
+Nenhum outro arquivo ou pasta deve ser criado.
+
+### 11.2 Ponto de entrada
+
+A aplicação deve ser inicializável pelo comando `uvicorn app.main:app`, executado a partir da pasta que contém a pasta `app`, com o objeto `app` (instância de `FastAPI`) exposto no módulo `app/main.py`.
+
+### 11.3 Regras de geração
+
+1. Entregue **arquivos completos**, sem trechos omitidos, sem `...`, sem "restante igual ao anterior".
+2. **Não** implemente nada que não esteja neste documento, inclusive o que estiver listado na Seção 2.2.
+3. **Não** altere nomes de campos, rotas, status HTTP ou mensagens de erro: use exatamente os desta especificação, com acentuação idêntica.
+4. **Não** use bibliotecas fora da lista de permitidas da Seção 4.
+5. Em caso de ambiguidade, implemente a leitura **mais literal** do texto; não adicione comportamento "razoável" não especificado.
+6. Não escreva testes, README, Dockerfile ou documentação, salvo se a Seção 11.1 os incluir.
+7. Atenção ao formato de erro: o comportamento padrão do FastAPI para erros de validação **não** atende à Seção 10; é necessário tratar as respostas de erro para que sigam o formato `{"erro": "<mensagem>"}`.
+
+---
+
+## 12. Matriz de rastreabilidade
+
+| Requisito | Critérios de aceitação | Regras | Endpoint | Caso de teste |
+|---|---|---|---|---|
+| RF-01 | CA-01.1 a CA-01.4 | RN-04 | `POST /produtos` | `test_rf01_produtos.py` |
+| RF-02 | CA-02.1, CA-02.2 | — | `GET /produtos` | `test_rf02_listar_produtos.py` |
+| RF-03 | CA-03.1, CA-03.2 | — | `GET /produtos/{id}` | `test_rf03_consultar_produto.py` |
+| RF-04 | CA-04.1 a CA-04.5 | RN-01 | `POST /movimentacoes` | `test_rf04_entrada.py` |
+| RF-05 | CA-05.1 a CA-05.4 | RN-02, RN-03 | `POST /movimentacoes` | `test_rf05_saida.py` |
+| RF-06 | CA-06.1 a CA-06.3 | — | `GET /produtos/{id}/movimentacoes` | `test_rf06_listar_movimentacoes.py` |
+| RF-07 | CA-07.1 a CA-07.3 | RN-05 | `GET /alertas` | `test_rf07_alertas.py` |
+| RNF-04 | — | — | todos | `test_rnf.py` |
+| RNF-05 | — | — | `GET /produtos` | `test_rnf.py` |
+
+**Total de critérios de aceitação funcionais:** 23
+
+---
+
+## 13. Controle de versões do documento
+
+| Versão | Data | Autor | Mudança |
+|---|---|---|---|
+| 1.0 | 2026-09-19 | Grupo AED | Versão inicial, usada na rodada v1 do experimento |

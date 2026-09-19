@@ -1,0 +1,21 @@
+braco,rotulo,caso,modelo,execucao,especificacao,app_subiu,criterios_atendidos,total_criterios,conformidade,rnf_atendidos,rnf_total,medido_em
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-01,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:16+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-02,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:17+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-03,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:19+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-04,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:21+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-05,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:23+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-06,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:25+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-07,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:27+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-08,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:29+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-09,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:31+00:00
+A,Tratamento — documento estruturado (Biblioteca),biblioteca,sonnet,run-10,casos/biblioteca/requisitos-biblioteca.md,1,40,40,100.0,2,2,2026-09-19T22:42:33+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-01,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-02,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-03,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-04,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-05,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-06,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-07,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-08,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-09,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00
+B,Controle — texto livre (Biblioteca),biblioteca,sonnet,run-10,casos/biblioteca/descricao-livre.md,0,0,40,0.0,0,0,2026-09-19T22:42:40+00:00

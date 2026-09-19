@@ -1,0 +1,23 @@
+# Ambiente do experimento AED — Sistemas Distribuídos
+#
+# Este arquivo define o ambiente ÚNICO em que todo código gerado é executado
+# e medido. Nenhuma execução instala dependências próprias: bibliotecas fora
+# desta lista são registradas como violação pela inspeção (experimento/inspecao.py).
+#
+# Python de referência: 3.14.4
+# Versões congeladas em 2026-09-19 para garantir reprodutibilidade do experimento.
+
+# --- Runtime exigido pelo documento de requisitos (Seção 4) ---
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+
+# --- Instrumento de medição ---
+pytest==9.1.1
+httpx==0.28.1
+
+# --- Análise estatística e gráficos ---
+numpy==2.5.3
+scipy==1.18.1
+pandas==3.0.6
+matplotlib==3.11.2

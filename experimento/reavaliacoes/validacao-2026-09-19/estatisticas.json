@@ -1,0 +1,66 @@
+{
+  "limiar": 85.0,
+  "unidade": "execução de geração",
+  "grupos": {
+    "A": {
+      "descritiva": {
+        "n": 10,
+        "media": 100.0,
+        "desvio": 0.0,
+        "mediana": 100.0,
+        "minimo": 100.0,
+        "maximo": 100.0,
+        "execucoes_acima_85": 10,
+        "execucoes_pelo_menos_85": 10
+      },
+      "nao_subiram": 0,
+      "hipotese_media": {
+        "n": 10,
+        "h0": "mu <= 85",
+        "h1": "mu > 85",
+        "alfa": 0.05,
+        "teste": "t unilateral de uma amostra",
+        "decisao": "inconclusivo",
+        "rejeita_h0": null,
+        "t": null,
+        "p": null,
+        "ic95_media": null,
+        "motivo": "variância amostral zero: erro padrão nulo; teste t e IC t não reportados"
+      },
+      "exploratoria_proporcao": {
+        "n": 10,
+        "k": 10,
+        "definicao": "q = P(conformidade > 85%)",
+        "h0": "q <= 0.5",
+        "h1": "q > 0.5",
+        "alfa": 0.05,
+        "natureza": "exploratória pós-hoc; não testa a média nem q > 0.85",
+        "pressuposto": "gerações independentes com mesma probabilidade de sucesso",
+        "p": 0.0009765625,
+        "proporcao": 1.0,
+        "ic95_exato_bilateral": [
+          0.6915028921812393,
+          1.0
+        ],
+        "rejeita_h0": true
+      }
+    },
+    "B": {
+      "descritiva": {
+        "n": 10,
+        "media": 0.0,
+        "desvio": 0.0,
+        "mediana": 0.0,
+        "minimo": 0.0,
+        "maximo": 0.0,
+        "execucoes_acima_85": 0,
+        "execucoes_pelo_menos_85": 0
+      },
+      "nao_subiram": 10
+    }
+  },
+  "comparacao_AB": {
+    "natureza": "comparação exclusivamente descritiva; controle sem contrato de execução equivalente",
+    "diferenca_medias_pp": 100.0
+  }
+}
